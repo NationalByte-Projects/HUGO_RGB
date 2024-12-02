@@ -1,0 +1,5 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "RGB_LEDS")(type "KiCad")(uri "D:/Me/Trabajo2023/Personal/Hugo_CDMX/Kicad_PCB/RGB_LEDS.pretty")(options "")(descr ""))
+  (lib (name "Library")(type "KiCad")(uri "${KIPRJMOD}/Library.pretty")(options "")(descr ""))
+)

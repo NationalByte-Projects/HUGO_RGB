@@ -1,0 +1,17 @@
+0001 LC2KiCad.code-workspace
+CMakeFiles/*
+build/
+Makefile
+CMakeCache.txt
+cmake_install.cmake
+.vscode/
+lc2kicad
+out/
+.vs/
+testfolder/
+CMakeLists.txt.user
+.idea/*
+.ccls-cache
+compile_commands.json
+src/lc2kicadcore.cpp
+LC2KiCad.kdev4

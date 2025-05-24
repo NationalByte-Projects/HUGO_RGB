@@ -1,5 +1,5 @@
 #MicroXplorer Configuration settings - do not modify
-ADC1.ContinuousConvMode=ENABLE
+ADC1.ContinuousConvMode=DISABLE
 ADC1.DMAContinuousRequests=DISABLE
 ADC1.IPParameters=NbrOfConversionFlag,master,SelectedChannel,ContinuousConvMode,DMAContinuousRequests
 ADC1.NbrOfConversionFlag=0

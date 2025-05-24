@@ -32,11 +32,13 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define AVERAGE_SAMPLES 100
+#define AVERAGE_SAMPLES 300
 #define EVALUATE_INTERVAL_MS 1500  // e.g. every 5 seconds
 #define THRESHOLD_A 1000
 #define THRESHOLD_B 3000
 #define ADC_Received 0x01
+#define Resistor 8.20
+#define Voltage 5.0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,6 +53,7 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 uint16_t adc_sample_buffer[AVERAGE_SAMPLES];
+uint32_t average = 0x00;
 uint32_t sample_index = 0;
 uint8_t buffer_filled = 0;
 uint32_t last_eval_tick = 0;
@@ -59,6 +62,8 @@ uint32_t lastPrintTick = 0;
 uint16_t adc_buffer[1];  // Single conversion buffer
 uint8_t flag = 0x0;
 float mA = 0;
+float V = 0;
+uint16_t adc_val = 0x00;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -108,7 +113,7 @@ int main(void)
   MX_ADC1_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, 1);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -119,41 +124,57 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  // UART print every 1 ms (debug)
-
-	  if((flag&ADC_Received)==ADC_Received){
-//		  mA = 3.3 * (adc_buffer[0]/4096);
-		  flag&= ~ADC_Received;
-	  }
-	  if ((HAL_GetTick() - lastPrintTick) >= 1)
+	  HAL_ADC_Start(&hadc1);
+	  if (HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY) == HAL_OK)
 	  {
-		 mA = 3.3 * (adc_buffer[0]/4096);
-		lastPrintTick = HAL_GetTick();
-		char msg[32];
-		int len = snprintf(msg, sizeof(msg), "ADC = %u\r\n", (unsigned)adc_dma_value);
-		HAL_UART_Transmit(&huart1, (uint8_t*)msg, len, HAL_MAX_DELAY);
+		  adc_val = HAL_ADC_GetValue(&hadc1);
+//		  mA = 3.3f * (adc_val/4096.0f);
+		  for (int i = 0; i < AVERAGE_SAMPLES - 1; i++) {
+		      adc_sample_buffer[i] = adc_sample_buffer[i + 1];
+		  }
+
+		  // Place new value at the end
+		  adc_sample_buffer[AVERAGE_SAMPLES - 1] = adc_val;
+		  average = 0;
+		  for(int i = 0; i<AVERAGE_SAMPLES;i++){
+			  average += adc_sample_buffer[i];
+		  }
+		  average = (average/AVERAGE_SAMPLES);
+		  V = 3.3f * (average/4096.0f);
+		  mA = V/(Resistor*200);
+		  // Optional UART debug print
+		  if ((HAL_GetTick() - lastPrintTick) >= 1)
+		  {
+			  lastPrintTick = HAL_GetTick();
+			  char msg[32];
+			  int len = snprintf(msg, sizeof(msg), "ADC = %u\r\n", adc_val);
+			  HAL_UART_Transmit(&huart1, (uint8_t*)msg, len, HAL_MAX_DELAY);
+		  }
 	  }
 
-	  // Evaluate average every X ms
+	  // Evaluate average and toggle GPIO after delay
 	  if (buffer_filled && (HAL_GetTick() - last_eval_tick >= EVALUATE_INTERVAL_MS))
 	  {
-  //	    last_eval_tick = HAL_GetTick();
+		  last_eval_tick = HAL_GetTick();
 
-		uint32_t sum = 0;
-		for (int i = 0; i < AVERAGE_SAMPLES; i++)
-		  sum += adc_sample_buffer[i];
+		  uint32_t sum = 0;
+		  for (int i = 0; i < AVERAGE_SAMPLES; i++)
+			  sum += adc_sample_buffer[i];
 
-		uint16_t avg = sum / AVERAGE_SAMPLES;
+		  uint16_t avg = sum / AVERAGE_SAMPLES;
 
-		// Evaluate thresholds
-
-
-		if (avg < THRESHOLD_A)
+		  // Reset all pins
 		  HAL_GPIO_WritePin(R_GPIO_Port, R_Pin, GPIO_PIN_RESET);
-		else if (avg > THRESHOLD_B)
 		  HAL_GPIO_WritePin(G_GPIO_Port, G_Pin, GPIO_PIN_RESET);
-		else
 		  HAL_GPIO_WritePin(B_GPIO_Port, B_Pin, GPIO_PIN_RESET);
+
+		  // Set only one pin based on thresholds
+		  if (avg < THRESHOLD_A)
+			  HAL_GPIO_WritePin(R_GPIO_Port, R_Pin, GPIO_PIN_SET);
+		  else if (avg >= THRESHOLD_A && avg < THRESHOLD_B)
+			  HAL_GPIO_WritePin(G_GPIO_Port, G_Pin, GPIO_PIN_SET);
+		  else
+			  HAL_GPIO_WritePin(B_GPIO_Port, B_Pin, GPIO_PIN_SET);
 	  }
   }
   /* USER CODE END 3 */
@@ -225,8 +246,9 @@ static void MX_ADC1_Init(void)
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc1.Init.LowPowerAutoWait = DISABLE;
   hadc1.Init.LowPowerAutoPowerOff = DISABLE;
-  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.DMAContinuousRequests = DISABLE;

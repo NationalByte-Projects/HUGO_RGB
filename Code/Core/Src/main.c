@@ -32,7 +32,11 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define AVERAGE_SAMPLES 100
+#define EVALUATE_INTERVAL_MS 1500  // e.g. every 5 seconds
+#define THRESHOLD_A 1000
+#define THRESHOLD_B 3000
+#define ADC_Received 0x01
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -42,20 +46,24 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
-DMA_HandleTypeDef hdma_adc1;
 
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
+uint16_t adc_sample_buffer[AVERAGE_SAMPLES];
+uint32_t sample_index = 0;
+uint8_t buffer_filled = 0;
+uint32_t last_eval_tick = 0;
 volatile uint16_t adc_dma_value = 0;  // Last ADC value
 uint32_t lastPrintTick = 0;
 uint16_t adc_buffer[1];  // Single conversion buffer
+uint8_t flag = 0x0;
+float mA = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
@@ -97,7 +105,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_ADC1_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
@@ -109,14 +116,45 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+
+	  // UART print every 1 ms (debug)
+
+	  if((flag&ADC_Received)==ADC_Received){
+//		  mA = 3.3 * (adc_buffer[0]/4096);
+		  flag&= ~ADC_Received;
+	  }
 	  if ((HAL_GetTick() - lastPrintTick) >= 1)
 	  {
+		 mA = 3.3 * (adc_buffer[0]/4096);
 		lastPrintTick = HAL_GetTick();
 		char msg[32];
 		int len = snprintf(msg, sizeof(msg), "ADC = %u\r\n", (unsigned)adc_dma_value);
 		HAL_UART_Transmit(&huart1, (uint8_t*)msg, len, HAL_MAX_DELAY);
 	  }
-    /* USER CODE BEGIN 3 */
+
+	  // Evaluate average every X ms
+	  if (buffer_filled && (HAL_GetTick() - last_eval_tick >= EVALUATE_INTERVAL_MS))
+	  {
+  //	    last_eval_tick = HAL_GetTick();
+
+		uint32_t sum = 0;
+		for (int i = 0; i < AVERAGE_SAMPLES; i++)
+		  sum += adc_sample_buffer[i];
+
+		uint16_t avg = sum / AVERAGE_SAMPLES;
+
+		// Evaluate thresholds
+
+
+		if (avg < THRESHOLD_A)
+		  HAL_GPIO_WritePin(R_GPIO_Port, R_Pin, GPIO_PIN_RESET);
+		else if (avg > THRESHOLD_B)
+		  HAL_GPIO_WritePin(G_GPIO_Port, G_Pin, GPIO_PIN_RESET);
+		else
+		  HAL_GPIO_WritePin(B_GPIO_Port, B_Pin, GPIO_PIN_RESET);
+	  }
   }
   /* USER CODE END 3 */
 }
@@ -264,22 +302,6 @@ static void MX_USART1_UART_Init(void)
 }
 
 /**
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void)
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-
-}
-
-/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -313,12 +335,17 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
   if (hadc->Instance == ADC1)
   {
-    /* update the latest sample */
-    adc_dma_value = adc_buffer[0];
+    adc_sample_buffer[sample_index++] = adc_buffer[0];
+    flag |= ADC_Received;
+    mA = 3.3 * (adc_buffer[0]/4096);
+    if (sample_index >= AVERAGE_SAMPLES) {
+      sample_index = 0;
+      buffer_filled = 1;
+    }
   }
 }
-/* USER CODE END 4 */
 
+/* USER CODE END 4 */
 
 /**
   * @brief  This function is executed in case of error occurrence.

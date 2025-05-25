@@ -33,12 +33,13 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define AVERAGE_SAMPLES 300
-#define EVALUATE_INTERVAL_MS 1500  // e.g. every 5 seconds
-#define THRESHOLD_A 1000
-#define THRESHOLD_B 3000
+#define EVALUATE_INTERVAL_MS 500  // e.g. every  0.5 seconds
+#define LOWER_LEVEL 1.6f
+#define UPPER_LEVEL 1.9f
 #define ADC_Received 0x01
 #define Resistor 8.20
 #define Voltage 5.0
+#define INITIAL_DELAY 100 // time it waits before getting current values (miliseconds)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -113,7 +114,11 @@ int main(void)
   MX_ADC1_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-
+//  HAL_GPIO_WritePin(R_GPIO_Port, R_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(G_GPIO_Port, G_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(B_GPIO_Port, B_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(R_GPIO_Port, R_Pin, GPIO_PIN_SET);
+//  HAL_Delay(INITIAL_DELAY);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -142,39 +147,19 @@ int main(void)
 		  average = (average/AVERAGE_SAMPLES);
 		  V = 3.3f * (average/4096.0f);
 		  mA = V/(Resistor*200);
-		  // Optional UART debug print
-		  if ((HAL_GetTick() - lastPrintTick) >= 1)
-		  {
-			  lastPrintTick = HAL_GetTick();
-			  char msg[32];
-			  int len = snprintf(msg, sizeof(msg), "ADC = %u\r\n", adc_val);
-			  HAL_UART_Transmit(&huart1, (uint8_t*)msg, len, HAL_MAX_DELAY);
-		  }
 	  }
 
 	  // Evaluate average and toggle GPIO after delay
-	  if (buffer_filled && (HAL_GetTick() - last_eval_tick >= EVALUATE_INTERVAL_MS))
+	  if ((HAL_GetTick() - last_eval_tick) >= EVALUATE_INTERVAL_MS)
 	  {
 		  last_eval_tick = HAL_GetTick();
-
-		  uint32_t sum = 0;
-		  for (int i = 0; i < AVERAGE_SAMPLES; i++)
-			  sum += adc_sample_buffer[i];
-
-		  uint16_t avg = sum / AVERAGE_SAMPLES;
-
-		  // Reset all pins
-		  HAL_GPIO_WritePin(R_GPIO_Port, R_Pin, GPIO_PIN_RESET);
-		  HAL_GPIO_WritePin(G_GPIO_Port, G_Pin, GPIO_PIN_RESET);
-		  HAL_GPIO_WritePin(B_GPIO_Port, B_Pin, GPIO_PIN_RESET);
-
 		  // Set only one pin based on thresholds
-		  if (avg < THRESHOLD_A)
-			  HAL_GPIO_WritePin(R_GPIO_Port, R_Pin, GPIO_PIN_SET);
-		  else if (avg >= THRESHOLD_A && avg < THRESHOLD_B)
-			  HAL_GPIO_WritePin(G_GPIO_Port, G_Pin, GPIO_PIN_SET);
+		  if (mA < LOWER_LEVEL)
+			  HAL_GPIO_WritePin(R_GPIO_Port, R_Pin, GPIO_PIN_RESET);
+		  else if (mA<UPPER_LEVEL)
+			  HAL_GPIO_WritePin(G_GPIO_Port, G_Pin, GPIO_PIN_RESET);
 		  else
-			  HAL_GPIO_WritePin(B_GPIO_Port, B_Pin, GPIO_PIN_SET);
+			  HAL_GPIO_WritePin(B_GPIO_Port, B_Pin, GPIO_PIN_RESET);
 	  }
   }
   /* USER CODE END 3 */
@@ -196,7 +181,7 @@ void SystemClock_Config(void)
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV4;
+  RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV2;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {

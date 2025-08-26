@@ -1025,7 +1025,7 @@
       (net 34 "unconnected-(S1-COM_2-Pad7)") (pinfunction "COM_2") (pintype "passive") (tstamp 49a4765f-c0b9-4d75-8184-a3a429a853b8))
     (pad "8" smd rect (at 4 -2.2 90) (size 1.2 1.4) (layers "F.Cu" "F.Paste" "F.Mask")
       (net 35 "unconnected-(S1-NO_4-Pad8)") (pinfunction "NO_4") (pintype "passive") (tstamp b74dec12-af89-412e-aa5d-2a383476f237))
-    (model "D:\\ProgramFiles\\KiCad\\7.0\\Components\\SamacSys_Parts.3dshapes\\CL-SB-23B-01T.stp"
+    (model "${KIPRJMOD}/packages3D/CL-SB-23B-01T.stp"
       (offset (xyz 0 0 0))
       (scale (xyz 1 1 1))
       (rotate (xyz 0 0 0))
